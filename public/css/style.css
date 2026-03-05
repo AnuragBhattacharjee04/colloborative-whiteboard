@@ -1,0 +1,14 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    background-color: #f4f7f6;
+}
+
+#whiteboard {
+    display: block;
+    background-color: white;
+    cursor: crosshair;
+}
+
+
