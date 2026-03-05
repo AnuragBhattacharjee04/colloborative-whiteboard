@@ -2,12 +2,16 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const mongoose = require("mongoose");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const mongoose = require("mongoose");
+mongoose.connect('mongodb://127.0.0.1:27017/whiteboardDB')
+    .then(() => console.log("MongoDB Connected"))
+    .catch(err => console.log(err));
+
 const strokeSchema = new mongoose.Schema({
     points: [{ x: Number, y: Number }],
     color: String,
@@ -24,5 +28,33 @@ app.get("/",(req,res)=>{
 
 });
 
-const PORT = 6000;
+io.on('connection', async (socket) => {
+    console.log('User connected:', socket.id);
+
+    // Load History from MongoDB
+    try {
+        const history = await Stroke.find();
+        socket.emit('history', history);
+    } catch (err) {
+        console.log("Error fetching history:", err);
+    }
+
+    // Save New Stroke to MongoDB
+    socket.on('stroke', async (data) => {
+        try {
+            const newStroke = new Stroke(data);
+            await newStroke.save();
+            socket.broadcast.emit('stroke', data);
+        } catch (err) {
+            console.log("Error saving stroke:", err);
+        }
+    });
+
+    socket.on('clear', async () => {
+        await Stroke.deleteMany({});
+        socket.broadcast.emit('clear');
+    });
+});
+
+const PORT = 3000;
 server.listen(PORT, () => console.log(`Server running at ${PORT}`));
