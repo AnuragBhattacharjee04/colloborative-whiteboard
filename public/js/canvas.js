@@ -3,15 +3,27 @@ const canvas = document.getElementById('whiteboard');
 const ctx = canvas.getContext('2d');
 const colors = document.querySelectorAll('.color');
 const clearBtn = document.getElementById('clearBtn');
+const statusIndicator = document.getElementById('statusIndicator');
+const statusText = document.getElementById('statusText');
+
+socket.on('connect', () => {
+    statusIndicator.classList.add('online');
+    statusText.innerText = 'Live / Connected';
+});
+
+socket.on('disconnect', () => {
+    statusIndicator.classList.remove('online');
+    statusText.innerText = 'Offline / Reconnecting';
+});
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
 let drawing = false;
 let currentColor = '#000000';
-let currentStroke = []; // Holds points for the line currently being drawn
+let currentStroke = [];
 
-// Color Selection
+
 colors.forEach(color => {
     color.addEventListener('click', (e) => {
         colors.forEach(c => c.classList.remove('selected'));
@@ -20,7 +32,7 @@ colors.forEach(color => {
     });
 });
 
-// 1. Load History (Draw everything already in MongoDB)
+
 socket.on('history', (history) => {
     history.forEach(stroke => {
         drawFullStroke(stroke.points, stroke.color);
@@ -40,7 +52,7 @@ canvas.onmousemove = (e) => {
     draw(newPoint.x, newPoint.y, currentColor);
     currentStroke.push(newPoint);
 
-    // Optional: Keep real-time feel by sending individual points too
+    
     socket.emit('draw', { x: e.clientX, y: e.clientY, color: currentColor });
 };
 
@@ -48,17 +60,17 @@ canvas.onmouseup = () => {
     if (!drawing) return;
     drawing = false;
     
-    // 2. Save to DB: Send the entire finished line to MongoDB
+    
     socket.emit('stroke', { points: currentStroke, color: currentColor });
     ctx.beginPath();
 };
 
-// Listen for drawing from other users
+
 socket.on('draw', (data) => {
     draw(data.x, data.y, data.color);
 });
 
-// Listen for full strokes (from history or other users finishing a line)
+
 socket.on('stroke', (data) => {
     drawFullStroke(data.points, data.color);
 });
@@ -72,7 +84,6 @@ clearBtn.onclick = () => {
     socket.emit('clear');
 };
 
-// Helper: Basic Draw
 function draw(x, y, color) {
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
@@ -83,7 +94,6 @@ function draw(x, y, color) {
     ctx.moveTo(x, y);
 }
 
-// Helper: Draw an entire stroke (used for history)
 function drawFullStroke(points, color) {
     if (!points || points.length < 2) return;
     ctx.beginPath();
