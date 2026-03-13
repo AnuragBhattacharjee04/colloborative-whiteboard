@@ -7,9 +7,9 @@
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js"></script>
 </head>
 <body>
-    
     <div class="main-container">
         <div class="canvas-area">
             <div class="toolbar">
@@ -25,36 +25,45 @@
                     <select id="brushShape">
                         <option value="round">Round</option>
                         <option value="square">Square</option>
-                        <option value="butt">Flat</option>
                     </select>
                 </div>
                 <div class="divider"></div>
                 <button id="undoBtn" class="secondary-btn">Undo</button>
+                <button id="laserBtn" style="background: #f39c12;">Laser</button>
                 <div class="divider"></div>
                 <div class="export-group">
                     <select id="exportFormat">
                         <option value="png">PNG</option>
-                        <option value="jpeg">JPEG</option>
                         <option value="pdf">PDF</option>
                     </select>
-                    <button id="downloadBtn" class="download-btn">Download</button>
+                    <button id="downloadBtn" class="download-btn">Save</button>
                 </div>
-                <div class="divider"></div>
                 <button id="clearBtn">Clear</button>
             </div>
             <canvas id="whiteboard"></canvas>
         </div>
 
         <div class="chat-sidebar">
-            <div class="chat-header">Group Chat</div>
+            <div class="video-grid" id="video-grid">
+                <div id="video-auth-overlay">
+                    <button id="startVideoBtn">Join Video Call</button>
+                </div>
+                <div id="local-video-container" style="display:none; position: relative;">
+                    <video id="local-video" autoplay muted playsinline></video>
+                    <div class="video-controls">
+                        <button id="muteBtn">Mute</button>
+                        <button id="camBtn">Stop Cam</button>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-header">Live Chat</div>
             <div id="chat-messages"></div>
             <form id="chat-form">
-                <input type="text" id="chat-input" placeholder="Say something..." autocomplete="off">
+                <input type="text" id="chat-input" placeholder="Message..." autocomplete="off">
                 <button type="submit">Send</button>
             </form>
         </div>
     </div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/canvas.js"></script>
 </body>

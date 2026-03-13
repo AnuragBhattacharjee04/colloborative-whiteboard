@@ -1,160 +1,155 @@
 const socket = io();
 const canvas = document.getElementById('whiteboard');
 const ctx = canvas.getContext('2d');
+const videoGrid = document.getElementById('video-grid');
+const localVideo = document.getElementById('local-video');
+const startVideoBtn = document.getElementById('startVideoBtn');
+const videoAuthOverlay = document.getElementById('video-auth-overlay');
+const localVidContainer = document.getElementById('local-video-container');
+const peers = {};
 
+let drawing = false, laserMode = false;
+let currentColor = '#000000', currentSize = 3, currentShape = 'round';
+let myStream;
 
-const colors = document.querySelectorAll('.color');
-const clearBtn = document.getElementById('clearBtn');
-const undoBtn = document.getElementById('undoBtn');
-const brushSize = document.getElementById('brushSize');
-const brushShape = document.getElementById('brushShape');
-const downloadBtn = document.getElementById('downloadBtn');
-const exportFormat = document.getElementById('exportFormat');
-
-
-const chatForm = document.getElementById('chat-form');
-const chatInput = document.getElementById('chat-input');
-const chatMessages = document.getElementById('chat-messages');
-
-
-let drawing = false;
-let currentColor = '#000000';
-let currentSize = 3;
-let currentShape = 'round';
-let currentStroke = [];
-
-
-function resizeCanvas() {
-    const container = document.querySelector('.canvas-area');
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+function resize() {
+    const area = document.querySelector('.canvas-area');
+    canvas.width = area.clientWidth;
+    canvas.height = area.clientHeight;
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.onresize = resize; resize();
+
+
+startVideoBtn.onclick = () => {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        myStream = stream;
+        videoAuthOverlay.style.display = 'none';
+        localVidContainer.style.display = 'block';
+        localVideo.srcObject = stream;
+        
+        socket.emit('join-video');
+        socket.on('user-joined-video', userId => connectToPeer(userId, stream, true));
+        socket.on('signal', data => {
+            if (!peers[data.from]) connectToPeer(data.from, stream, false);
+            peers[data.from].signal(data.signal);
+        });
+    }).catch(() => alert("Could not access camera/mic"));
+};
+
+function connectToPeer(userId, stream, initiator) {
+    const peer = new SimplePeer({ initiator, trickle: false, stream });
+    peer.on('signal', signal => socket.emit('signal', { to: userId, signal }));
+    peer.on('stream', remoteStream => {
+        if (document.getElementById(userId)) return;
+        const video = document.createElement('video');
+        video.id = userId; video.srcObject = remoteStream;
+        video.autoplay = true; video.playsinline = true;
+        videoGrid.appendChild(video);
+    });
+    peers[userId] = peer;
+}
+
+
+document.getElementById('muteBtn').onclick = (e) => {
+    const enabled = myStream.getAudioTracks()[0].enabled;
+    myStream.getAudioTracks()[0].enabled = !enabled;
+    e.target.innerText = enabled ? "Unmute" : "Mute";
+};
+document.getElementById('camBtn').onclick = (e) => {
+    const enabled = myStream.getVideoTracks()[0].enabled;
+    myStream.getVideoTracks()[0].enabled = !enabled;
+    e.target.innerText = enabled ? "Start Cam" : "Stop Cam";
+};
 
 
 canvas.onmousedown = (e) => {
+    if(laserMode) return;
     drawing = true;
-    currentStroke = {
-        points: [{ x: e.clientX, y: e.clientY }],
-        color: currentColor,
-        size: currentSize,
-        shape: currentShape
-    };
-    ctx.beginPath();
-    ctx.moveTo(e.clientX, e.clientY);
+    ctx.beginPath(); ctx.moveTo(e.clientX, e.clientY);
+    currentStroke = { points: [{x: e.clientX, y: e.clientY}], color: currentColor, size: currentSize, shape: currentShape };
 };
 
 canvas.onmousemove = (e) => {
+    if (laserMode) {
+        socket.emit('laser-move', { x: e.clientX, y: e.clientY });
+        showLaser(e.clientX, e.clientY);
+        return;
+    }
     if (!drawing) return;
     draw(e.clientX, e.clientY, currentColor, currentSize, currentShape);
     currentStroke.points.push({ x: e.clientX, y: e.clientY });
     socket.emit('draw', { x: e.clientX, y: e.clientY, color: currentColor, size: currentSize, shape: currentShape });
 };
 
-canvas.onmouseup = () => {
-    if (!drawing) return;
-    drawing = false;
-    socket.emit('stroke', currentStroke);
-};
+canvas.onmouseup = () => { drawing = false; if(!laserMode) socket.emit('stroke', currentStroke); };
 
-
-chatForm.onsubmit = (e) => {
-    e.preventDefault();
-    const text = chatInput.value.trim();
-    if (text) {
-        socket.emit('chat-message', { text });
-        chatInput.value = '';
-    }
-};
-
-socket.on('chat-message', (data) => {
-    const msgDiv = document.createElement('div');
-    const isMe = data.user === socket.id.substring(0, 5);
-    msgDiv.classList.add('message');
-    if (isMe) msgDiv.classList.add('me');
-    
-    msgDiv.innerHTML = `<strong>${isMe ? 'Me' : data.user}:</strong> ${data.text}`;
-    chatMessages.appendChild(msgDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-});
-
-
-colors.forEach(color => {
-    color.addEventListener('click', (e) => {
-        colors.forEach(c => c.classList.remove('selected'));
-        e.target.classList.add('selected');
-        currentColor = e.target.dataset.color;
-    });
-});
-
-brushSize.oninput = (e) => currentSize = e.target.value;
-brushShape.onchange = (e) => currentShape = e.target.value;
-undoBtn.onclick = () => socket.emit('undo');
-clearBtn.onclick = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    socket.emit('clear');
-};
-
-
-downloadBtn.onclick = () => {
-    const format = exportFormat.value;
-    const fileName = `whiteboard-${Date.now()}`;
-    if (format === 'pdf') {
-        const { jsPDF } = window.jspdf;
-        const orientation = canvas.width > canvas.height ? 'l' : 'p';
-        const pdf = new jsPDF(orientation, 'px', [canvas.width, canvas.height]);
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save(`${fileName}.pdf`);
-    } else {
-        const link = document.createElement('a');
-        if (format === 'jpeg') {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tCtx = tempCanvas.getContext('2d');
-            tCtx.fillStyle = '#FFFFFF';
-            tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tCtx.drawImage(canvas, 0, 0);
-            link.href = tempCanvas.toDataURL('image/jpeg', 1.0);
-        } else {
-            link.href = canvas.toDataURL('image/png');
-        }
-        link.download = `${fileName}.${format}`;
-        link.click();
-    }
-};
-
-
-socket.on('history', (history) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    history.forEach(s => drawFullStroke(s.points, s.color, s.size, s.shape));
-});
-
-socket.on('draw', (data) => draw(data.x, data.y, data.color, data.size, data.shape));
-socket.on('stroke', (data) => drawFullStroke(data.points, data.color, data.size, data.shape));
-socket.on('clear', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
-
-function draw(x, y, color, size, shape) {
-    ctx.lineWidth = size;
-    ctx.lineCap = shape;
-    ctx.strokeStyle = color;
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+function draw(x, y, c, s, sh) {
+    ctx.lineWidth = s; ctx.lineCap = sh; ctx.strokeStyle = c;
+    ctx.lineTo(x, y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y);
 }
 
-function drawFullStroke(points, color, size, shape) {
-    if (!points || points.length < 2) return;
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = size;
-    ctx.lineCap = shape;
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
+function showLaser(x, y) {
+    const dot = document.createElement('div');
+    dot.className = 'laser-dot'; dot.style.left = x + 'px'; dot.style.top = y + 'px';
+    document.body.appendChild(dot); setTimeout(() => dot.remove(), 400);
+}
+
+
+document.getElementById('chat-form').onsubmit = (e) => {
+    e.preventDefault();
+    const input = document.getElementById('chat-input');
+    if (input.value) { socket.emit('chat-message', { text: input.value }); input.value = ''; }
+};
+
+socket.on('chat-message', data => {
+    const div = document.createElement('div');
+    const isMe = data.user === socket.id.substring(0,5);
+    div.className = `message ${isMe ? 'me' : ''}`;
+    div.innerHTML = `<b>${isMe ? 'Me' : data.user}:</b> ${data.text}`;
+    document.getElementById('chat-messages').appendChild(div);
+    document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+});
+
+document.querySelectorAll('.color').forEach(c => {
+    c.onclick = () => {
+        document.querySelector('.color.selected').classList.remove('selected');
+        c.classList.add('selected');
+        currentColor = c.dataset.color;
+    };
+});
+
+document.getElementById('brushSize').oninput = (e) => currentSize = e.target.value;
+document.getElementById('brushShape').onchange = (e) => currentShape = e.target.value;
+document.getElementById('undoBtn').onclick = () => socket.emit('undo');
+document.getElementById('clearBtn').onclick = () => { ctx.clearRect(0,0,canvas.width,canvas.height); socket.emit('clear'); };
+
+document.getElementById('laserBtn').onclick = () => {
+    laserMode = !laserMode;
+    document.getElementById('laserBtn').style.background = laserMode ? 'red' : '#f39c12';
+};
+
+document.getElementById('downloadBtn').onclick = () => {
+    if (document.getElementById('exportFormat').value === 'pdf') {
+        const doc = new jspdf.jsPDF(canvas.width > canvas.height ? 'l' : 'p', 'px', [canvas.width, canvas.height]);
+        doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+        doc.save('board.pdf');
+    } else {
+        const link = document.createElement('a');
+        link.download = 'board.png'; link.href = canvas.toDataURL(); link.click();
     }
-    ctx.stroke();
-    ctx.beginPath();
+};
+
+
+socket.on('history', (h) => { ctx.clearRect(0,0,canvas.width,canvas.height); h.forEach(s => drawStroke(s)); });
+socket.on('draw', d => draw(d.x, d.y, d.color, d.size, d.shape));
+socket.on('stroke', d => drawStroke(d));
+socket.on('laser-move', d => showLaser(d.x, d.y));
+socket.on('clear', () => ctx.clearRect(0,0,canvas.width,canvas.height));
+socket.on('user-left-video', id => { if(peers[id]) peers[id].destroy(); const v = document.getElementById(id); if(v) v.remove(); });
+
+function drawStroke(s) {
+    if (!s.points || s.points.length < 2) return;
+    ctx.beginPath(); ctx.strokeStyle = s.color; ctx.lineWidth = s.size; ctx.lineCap = s.shape;
+    ctx.moveTo(s.points[0].x, s.points[0].y);
+    s.points.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
 }

@@ -25,53 +25,41 @@ const Stroke = mongoose.model('Stroke', strokeSchema);
 app.set('view engine', 'ejs');
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get("/", (req, res) => {
-    res.render("index");
-});
+app.get("/", (req, res) => { res.render("index"); });
 
 io.on('connection', async (socket) => {
-    
     try {
         const history = await Stroke.find().sort({ timestamp: 1 });
         socket.emit('history', history);
-    } catch (err) {
-        console.log("Error fetching history:", err);
-    }
+    } catch (err) { console.log(err); }
 
-    
-    socket.on('draw', (data) => {
-        socket.broadcast.emit('draw', data);
-    });
-
+    socket.on('draw', (data) => socket.broadcast.emit('draw', data));
     socket.on('stroke', async (data) => {
-        try {
-            const newStroke = new Stroke(data);
-            await newStroke.save();
-            socket.broadcast.emit('stroke', data);
-        } catch (err) {
-            console.log("Error saving stroke:", err);
-        }
+        const newStroke = new Stroke(data);
+        await newStroke.save();
+        socket.broadcast.emit('stroke', data);
     });
 
-    
+    socket.on('join-video', () => {
+        socket.broadcast.emit('user-joined-video', socket.id);
+    });
+
+    socket.on('signal', (data) => {
+        io.to(data.to).emit('signal', { from: socket.id, signal: data.signal });
+    });
+
     socket.on('chat-message', (data) => {
-        io.emit('chat-message', {
-            text: data.text,
-            user: socket.id.substring(0, 5) 
-        });
+        io.emit('chat-message', { text: data.text, user: socket.id.substring(0, 5) });
     });
 
-    
+    socket.on('laser-move', (data) => socket.broadcast.emit('laser-move', data));
+
     socket.on('undo', async () => {
-        try {
-            const lastStroke = await Stroke.findOne().sort({ timestamp: -1 });
-            if (lastStroke) {
-                await Stroke.findByIdAndDelete(lastStroke._id);
-                const history = await Stroke.find().sort({ timestamp: 1 });
-                io.emit('history', history); 
-            }
-        } catch (err) {
-            console.log("Undo error:", err);
+        const last = await Stroke.findOne().sort({ timestamp: -1 });
+        if (last) {
+            await Stroke.findByIdAndDelete(last._id);
+            const history = await Stroke.find().sort({ timestamp: 1 });
+            io.emit('history', history);
         }
     });
 
@@ -79,7 +67,10 @@ io.on('connection', async (socket) => {
         await Stroke.deleteMany({});
         socket.broadcast.emit('clear');
     });
+
+    socket.on('disconnect', () => {
+        io.emit('user-left-video', socket.id);
+    });
 });
 
-const PORT = 3000;
-server.listen(PORT, () => console.log(`Server running at ${PORT}`));
+server.listen(3000, () => console.log(`Server running on port 3000`));
