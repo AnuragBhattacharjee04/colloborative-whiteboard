@@ -1,26 +1,55 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Collaborative Board</title>
+    <title>Pro Collaborative Board | Anurag</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js"></script>
 </head>
 <body>
-    
 
-    <div class="toolbar">
+    <div id="video-container">
+        <div id="video-grid">
+            </div>
+    </div>
+
+    <div class="toolbar glass-effect">
+        <div class="tool-group">
+            <button class="tool-btn active" id="brushBtn" title="Brush">🖌️</button>
+            <button class="tool-btn" id="eraserBtn" title="Eraser">🧽</button>
+            <button class="tool-btn" id="highlighterBtn" title="Highlighter">🖍️</button>
+        </div>
+
+        <div class="divider"></div>
+
         <div class="color-picker">
             <div class="color selected" style="background: #000000;" data-color="#000000"></div>
             <div class="color" style="background: #e74c3c;" data-color="#e74c3c"></div>
             <div class="color" style="background: #3498db;" data-color="#3498db"></div>
             <div class="color" style="background: #2ecc71;" data-color="#2ecc71"></div>
-            <div class="color" style="background: #f1c40f;" data-color="#f1c40f"></div>
+            <input type="color" id="customColor" title="Custom Color">
         </div>
+
         <div class="divider"></div>
-        <button id="clearBtn">Clear Board</button>
+
+        <div class="size-slider">
+            <input type="range" id="brushSize" min="1" max="50" value="5">
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="action-group">
+            <button id="undoBtn" class="action-btn">Undo</button>
+            <button id="clearBtn" class="action-btn danger">Clear</button>
+            <button id="startVideoBtn" class="action-btn primary">Start Meet</button>
+        </div>
+    </div>
+
+    <div id="chat-window" class="glass-effect hidden">
+        <div id="chat-messages"></div>
+        <input type="text" id="chatInput" placeholder="Type a message...">
     </div>
 
     <canvas id="whiteboard"></canvas>
