@@ -1,6 +1,8 @@
 const socket = io();
 const canvas = document.getElementById('whiteboard');
 const ctx = canvas.getContext('2d');
+
+
 const colors = document.querySelectorAll('.color');
 const clearBtn = document.getElementById('clearBtn');
 const undoBtn = document.getElementById('undoBtn');
@@ -9,8 +11,11 @@ const brushShape = document.getElementById('brushShape');
 const downloadBtn = document.getElementById('downloadBtn');
 const exportFormat = document.getElementById('exportFormat');
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+const chatMessages = document.getElementById('chat-messages');
+
 
 let drawing = false;
 let currentColor = '#000000';
@@ -19,16 +24,13 @@ let currentShape = 'round';
 let currentStroke = [];
 
 
-colors.forEach(color => {
-    color.addEventListener('click', (e) => {
-        colors.forEach(c => c.classList.remove('selected'));
-        e.target.classList.add('selected');
-        currentColor = e.target.dataset.color;
-    });
-});
-
-brushSize.oninput = (e) => currentSize = e.target.value;
-brushShape.onchange = (e) => currentShape = e.target.value;
+function resizeCanvas() {
+    const container = document.querySelector('.canvas-area');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 
 canvas.onmousedown = (e) => {
@@ -45,13 +47,9 @@ canvas.onmousedown = (e) => {
 
 canvas.onmousemove = (e) => {
     if (!drawing) return;
-    const x = e.clientX;
-    const y = e.clientY;
-    
-    draw(x, y, currentColor, currentSize, currentShape);
-    currentStroke.points.push({ x, y });
-    
-    socket.emit('draw', { x, y, color: currentColor, size: currentSize, shape: currentShape });
+    draw(e.clientX, e.clientY, currentColor, currentSize, currentShape);
+    currentStroke.points.push({ x: e.clientX, y: e.clientY });
+    socket.emit('draw', { x: e.clientX, y: e.clientY, color: currentColor, size: currentSize, shape: currentShape });
 };
 
 canvas.onmouseup = () => {
@@ -61,6 +59,37 @@ canvas.onmouseup = () => {
 };
 
 
+chatForm.onsubmit = (e) => {
+    e.preventDefault();
+    const text = chatInput.value.trim();
+    if (text) {
+        socket.emit('chat-message', { text });
+        chatInput.value = '';
+    }
+};
+
+socket.on('chat-message', (data) => {
+    const msgDiv = document.createElement('div');
+    const isMe = data.user === socket.id.substring(0, 5);
+    msgDiv.classList.add('message');
+    if (isMe) msgDiv.classList.add('me');
+    
+    msgDiv.innerHTML = `<strong>${isMe ? 'Me' : data.user}:</strong> ${data.text}`;
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+
+colors.forEach(color => {
+    color.addEventListener('click', (e) => {
+        colors.forEach(c => c.classList.remove('selected'));
+        e.target.classList.add('selected');
+        currentColor = e.target.dataset.color;
+    });
+});
+
+brushSize.oninput = (e) => currentSize = e.target.value;
+brushShape.onchange = (e) => currentShape = e.target.value;
 undoBtn.onclick = () => socket.emit('undo');
 clearBtn.onclick = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -70,8 +99,7 @@ clearBtn.onclick = () => {
 
 downloadBtn.onclick = () => {
     const format = exportFormat.value;
-    const fileName = `drawing-${Date.now()}`;
-
+    const fileName = `whiteboard-${Date.now()}`;
     if (format === 'pdf') {
         const { jsPDF } = window.jspdf;
         const orientation = canvas.width > canvas.height ? 'l' : 'p';
@@ -81,7 +109,6 @@ downloadBtn.onclick = () => {
     } else {
         const link = document.createElement('a');
         if (format === 'jpeg') {
-            
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;

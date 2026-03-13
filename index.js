@@ -30,6 +30,7 @@ app.get("/", (req, res) => {
 });
 
 io.on('connection', async (socket) => {
+    
     try {
         const history = await Stroke.find().sort({ timestamp: 1 });
         socket.emit('history', history);
@@ -37,6 +38,7 @@ io.on('connection', async (socket) => {
         console.log("Error fetching history:", err);
     }
 
+    
     socket.on('draw', (data) => {
         socket.broadcast.emit('draw', data);
     });
@@ -51,6 +53,15 @@ io.on('connection', async (socket) => {
         }
     });
 
+    
+    socket.on('chat-message', (data) => {
+        io.emit('chat-message', {
+            text: data.text,
+            user: socket.id.substring(0, 5) 
+        });
+    });
+
+    
     socket.on('undo', async () => {
         try {
             const lastStroke = await Stroke.findOne().sort({ timestamp: -1 });
