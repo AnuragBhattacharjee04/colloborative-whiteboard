@@ -6,6 +6,7 @@
     <title>Pro Collaborative Board</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
     
@@ -31,7 +32,20 @@
         <div class="divider"></div>
 
         <button id="undoBtn" class="secondary-btn">Undo</button>
-        <button id="clearBtn">Clear Board</button>
+
+        <div class="divider"></div>
+
+        <div class="export-group">
+            <select id="exportFormat">
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+                <option value="pdf">PDF</option>
+            </select>
+            <button id="downloadBtn" class="download-btn">Download</button>
+        </div>
+
+        <div class="divider"></div>
+        <button id="clearBtn">Clear</button>
     </div>
 
     <canvas id="whiteboard"></canvas>

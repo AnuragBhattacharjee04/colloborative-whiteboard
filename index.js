@@ -30,14 +30,16 @@ app.get("/", (req, res) => {
 });
 
 io.on('connection', async (socket) => {
-    console.log('User connected:', socket.id);
-
     try {
         const history = await Stroke.find().sort({ timestamp: 1 });
         socket.emit('history', history);
     } catch (err) {
         console.log("Error fetching history:", err);
     }
+
+    socket.on('draw', (data) => {
+        socket.broadcast.emit('draw', data);
+    });
 
     socket.on('stroke', async (data) => {
         try {
@@ -55,7 +57,7 @@ io.on('connection', async (socket) => {
             if (lastStroke) {
                 await Stroke.findByIdAndDelete(lastStroke._id);
                 const history = await Stroke.find().sort({ timestamp: 1 });
-                io.emit('history', history);
+                io.emit('history', history); 
             }
         } catch (err) {
             console.log("Undo error:", err);
